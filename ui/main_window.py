@@ -166,13 +166,27 @@ class MainWindow(FramelessWindow):
             x = [ts.timestamp() for ts in portfolio.index]
             y = portfolio["total"].values
             color = colors[i % len(colors)]
-            self.plot_widget.plot(x, y, pen=pg.mkPen(color=color, width=2), name=ticker)
+            plot = self.plot_widget.plot(x, y, pen=pg.mkPen(color=color, width=2), name=ticker)
 
             returns = portfolio["total"].pct_change().dropna()
             sharpe = (returns.mean() / returns.std()) * (252 ** 0.5) if not returns.empty else 0.0
             peak = portfolio["total"].cummax()
             drawdown = ((portfolio["total"] - peak) / peak).min()
             total_return = (portfolio["total"].iloc[-1] - portfolio["total"].iloc[0]) / portfolio["total"].iloc[0]
+
+            # Draw entry/exit markers
+            prev_pos = 0
+            for j in range(len(portfolio)):
+                pos = portfolio["position"].iloc[j]
+                ts = portfolio.index[j].timestamp()
+                val = portfolio["total"].iloc[j]
+                if pos > prev_pos:
+                    entry = pg.ScatterPlotItem([ts], [val], symbol='t1', size=8, brush='g')
+                    self.plot_widget.addItem(entry)
+                elif pos < prev_pos:
+                    exit_ = pg.ScatterPlotItem([ts], [val], symbol='t', size=8, brush='r')
+                    self.plot_widget.addItem(exit_)
+                prev_pos = pos
 
             self.results[ticker] = {
                 "return": total_return,

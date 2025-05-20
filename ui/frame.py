@@ -16,6 +16,11 @@ class FramelessWindow(QDialog):
                 border: 1px solid #5a5a5a;
                 border-radius: 8px;
             }
+            #TitleBar {
+                background-color: #2e2e2e;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+            }
             QLabel {
                 color: #f0f0f0;
                 font-weight: bold;
@@ -39,6 +44,7 @@ class FramelessWindow(QDialog):
         self.title_label = QLabel(title)
         header_layout.addWidget(self.title_label)
         header_layout.addStretch()
+        self.header.setObjectName("TitleBar")
 
         self.min_btn = QPushButton("—")
         self.min_btn.clicked.connect(self.showMinimized)
