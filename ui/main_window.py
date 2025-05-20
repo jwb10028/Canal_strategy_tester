@@ -85,8 +85,19 @@ class MainWindow(FramelessWindow):
         main_layout.addWidget(self.plot_widget)
 
         # Metrics layout (grid)
+        from PyQt5.QtWidgets import QScrollArea, QFrame
+
+        self.metrics_container = QWidget()
         self.metrics_layout = QGridLayout()
-        main_layout.addLayout(self.metrics_layout)
+        self.metrics_container.setLayout(self.metrics_layout)
+
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setFixedHeight(180)
+        self.scroll_area.setWidget(self.metrics_container)
+        self.scroll_area.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+
+        main_layout.addWidget(self.scroll_area)
 
         self.add_body_widget(body)
 
