@@ -83,26 +83,12 @@ class MainWindow(FramelessWindow):
         plot_item.getAxis('left').setPen('#f0f0f0')
         plot_item.getAxis('bottom').setPen('#f0f0f0')
         main_layout.addWidget(self.plot_widget)
-        self.plot_placeholder()
 
-        # Metrics
-        metrics_layout = QGridLayout()
-        self.metrics = {
-            "Total Return": QLabel("--"),
-            "Sharpe Ratio": QLabel("--"),
-            "Max Drawdown": QLabel("--")
-        }
-        for row, (name, label) in enumerate(self.metrics.items()):
-            metrics_layout.addWidget(QLabel(f"{name}:"), row, 0)
-            metrics_layout.addWidget(label, row, 1)
-        main_layout.addLayout(metrics_layout)
+        # Metrics layout (grid)
+        self.metrics_layout = QGridLayout()
+        main_layout.addLayout(self.metrics_layout)
 
         self.add_body_widget(body)
-
-    def plot_placeholder(self):
-        x = [0, 1, 2, 3, 4, 5]
-        y = [100, 105, 103, 110, 108, 115]
-        self.plot_widget.plot(x, y, pen=pg.mkPen(color="#4fc3f7", width=2), symbol='o', symbolBrush="#4fc3f7")
 
     def open_modal(self, title, content):
         dialog = None
@@ -132,55 +118,57 @@ class MainWindow(FramelessWindow):
             print("Missing config")
             return
 
-        ticker = user_cfg["ticker"]
+        tickers = user_cfg.get("tickers", [])
         start = user_cfg["start_date"]
         end = user_cfg["end_date"]
 
-        df = yf.download(ticker, start=start, end=end)
-        if isinstance(df.columns, pd.MultiIndex):
-            df.columns = df.columns.get_level_values(0)
-        if df.empty:
-            print("Failed to download data")
-            return
-
-        strat = strat_cfg["strategy"]
-        if strat == "SMA Crossover":
-            signals = strategy_module.sma_crossover_strategy(df, strat_cfg["short_window"], strat_cfg["long_window"])
-        elif strat == "RSI":
-            signals = strategy_module.rsi_strategy(df, period=strat_cfg.get("rsi_period", 14))
-        elif strat == "Buy & Hold":
-            signals = strategy_module.buy_and_hold_strategy(df)
-        else:
-            print("Unknown strategy")
-            return
-
-        portfolio = backtest_module.run_backtest(
-            df,
-            signals,
-            initial_capital=user_cfg["initial_capital"],
-            position_size_pct=user_cfg["position_size"]
-        )
-
-        x = [ts.timestamp() for ts in portfolio.index]
-        y = portfolio["total"].values
-
         self.plot_widget.clear()
-        self.plot_widget.plot(x, y, pen=pg.mkPen(color="#4fc3f7", width=2))
+        self.results = {}
+        colors = ['#4fc3f7', '#ff8a65', '#9575cd', '#81c784', '#f06292', '#ffd54f', '#64b5f6', '#e57373', '#a1887f', '#4db6ac']
 
-        prev_pos = 0
-        for i in range(len(portfolio)):
-            pos = portfolio["position"].iloc[i]
-            ts = portfolio.index[i].timestamp()
+        for i, ticker in enumerate(tickers):
+            df = yf.download(ticker, start=start, end=end)
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            if df.empty:
+                print(f"Failed to download data for {ticker}")
+                continue
 
-            if pos > prev_pos:
-                line = InfiniteLine(pos=ts, angle=90, pen=pg.mkPen('b', width=1.5, style=Qt.DashLine), movable=False)
-                self.plot_widget.addItem(line)
-            elif pos < prev_pos:
-                line = InfiniteLine(pos=ts, angle=90, pen=pg.mkPen('r', width=1.5, style=Qt.DashLine), movable=False)
-                self.plot_widget.addItem(line)
-            prev_pos = pos
+            strat = strat_cfg["strategy"]
+            if strat == "SMA Crossover":
+                signals = strategy_module.sma_crossover_strategy(df, strat_cfg["short_window"], strat_cfg["long_window"])
+            elif strat == "RSI":
+                signals = strategy_module.rsi_strategy(df, period=strat_cfg.get("rsi_period", 14))
+            elif strat == "Buy & Hold":
+                signals = strategy_module.buy_and_hold_strategy(df)
+            else:
+                print("Unknown strategy")
+                continue
 
-        # Final exit line at end_date
+            portfolio = backtest_module.run_backtest(
+                df,
+                signals,
+                initial_capital=user_cfg["initial_capital"],
+                position_size_pct=user_cfg["position_size"]
+            )
+
+            x = [ts.timestamp() for ts in portfolio.index]
+            y = portfolio["total"].values
+            color = colors[i % len(colors)]
+            self.plot_widget.plot(x, y, pen=pg.mkPen(color=color, width=2), name=ticker)
+
+            returns = portfolio["total"].pct_change().dropna()
+            sharpe = (returns.mean() / returns.std()) * (252 ** 0.5) if not returns.empty else 0.0
+            peak = portfolio["total"].cummax()
+            drawdown = ((portfolio["total"] - peak) / peak).min()
+            total_return = (portfolio["total"].iloc[-1] - portfolio["total"].iloc[0]) / portfolio["total"].iloc[0]
+
+            self.results[ticker] = {
+                "return": total_return,
+                "sharpe": sharpe,
+                "drawdown": drawdown
+            }
+
         try:
             end_ts = datetime.strptime(user_cfg["end_date"], "%Y-%m-%d").timestamp()
             line = InfiniteLine(pos=end_ts, angle=90, pen=pg.mkPen('r', width=1.5, style=Qt.DashLine), movable=False)
@@ -188,10 +176,36 @@ class MainWindow(FramelessWindow):
         except Exception as e:
             print("Could not parse end date:", e)
 
-        total_return = (portfolio["total"].iloc[-1] - portfolio["total"].iloc[0]) / portfolio["total"].iloc[0]
-        self.metrics["Total Return"].setText(f"{total_return:.2%}")
-        self.metrics["Sharpe Ratio"].setText("--")
-        self.metrics["Max Drawdown"].setText("--")
+        # Clear metrics layout and display results
+        for i in reversed(range(self.metrics_layout.count())):
+            widget = self.metrics_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
+
+        for row, (ticker, stats) in enumerate(self.results.items()):
+            color = colors[row % len(colors)]
+            style = f"color: {color}; font-weight: bold;"
+        
+            self.metrics_layout.addWidget(QLabel(f"{ticker} Return:"), row * 3, 0)
+            return_label = QLabel(f"{stats['return']:.2%}")
+            return_label.setStyleSheet(style)
+            self.metrics_layout.addWidget(return_label, row * 3, 1)
+        
+            self.metrics_layout.addWidget(QLabel(f"{ticker} Sharpe:"), row * 3 + 1, 0)
+            sharpe_label = QLabel(f"{stats['sharpe']:.2f}")
+            sharpe_label.setStyleSheet(style)
+            self.metrics_layout.addWidget(sharpe_label, row * 3 + 1, 1)
+        
+            self.metrics_layout.addWidget(QLabel(f"{ticker} Max Drawdown:"), row * 3 + 2, 0)
+            drawdown_label = QLabel(f"{stats['drawdown']:.2%}")
+            drawdown_label.setStyleSheet(style)
+            self.metrics_layout.addWidget(drawdown_label, row * 3 + 2, 1)
+
+            self.metrics_layout.addWidget(QLabel(f"{ticker} Sharpe:"), row * 3 + 1, 0)
+            self.metrics_layout.addWidget(QLabel(f"{stats['sharpe']:.2f}"), row * 3 + 1, 1)
+
+            self.metrics_layout.addWidget(QLabel(f"{ticker} Max Drawdown:"), row * 3 + 2, 0)
+            self.metrics_layout.addWidget(QLabel(f"{stats['drawdown']:.2%}"), row * 3 + 2, 1)
 
 
 if __name__ == "__main__":

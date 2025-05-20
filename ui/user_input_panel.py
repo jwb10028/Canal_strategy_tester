@@ -1,9 +1,7 @@
-# ui/user_input_panel.py
-
 from ui.frame import FramelessWindow
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QLineEdit,
-    QDateEdit, QPushButton
+    QDateEdit, QPushButton, QListWidget, QListWidgetItem, QHBoxLayout
 )
 from PyQt5.QtCore import QDate
 
@@ -12,6 +10,8 @@ class UserInputDialog(FramelessWindow):
     def __init__(self):
         super().__init__(title="User Input Panel")
         self.setFixedWidth(400)
+
+        self.tickers = []
 
         self.setStyleSheet("""
             QDialog, QWidget {
@@ -59,10 +59,18 @@ class UserInputDialog(FramelessWindow):
         layout.setSpacing(12)
 
         # Stock ticker input
-        layout.addWidget(QLabel("Stock Ticker"))
+        layout.addWidget(QLabel("Add Ticker"))
+        ticker_input_layout = QHBoxLayout()
         self.ticker_input = QLineEdit()
         self.ticker_input.setPlaceholderText("e.g. AAPL, MSFT")
-        layout.addWidget(self.ticker_input)
+        ticker_input_layout.addWidget(self.ticker_input)
+        add_btn = QPushButton("Add")
+        add_btn.clicked.connect(self.add_ticker)
+        ticker_input_layout.addWidget(add_btn)
+        layout.addLayout(ticker_input_layout)
+
+        self.ticker_list = QListWidget()
+        layout.addWidget(self.ticker_list)
 
         # Start date
         layout.addWidget(QLabel("Start Date"))
@@ -104,9 +112,27 @@ class UserInputDialog(FramelessWindow):
         form.setLayout(layout)
         self.add_body_widget(form)
 
+    def add_ticker(self):
+        text = self.ticker_input.text().strip().upper()
+        if text and text not in self.tickers and len(self.tickers) < 10:
+            self.tickers.append(text)
+            item = QListWidgetItem(text)
+            del_btn = QPushButton("x")
+            del_btn.setMaximumWidth(20)
+            del_btn.clicked.connect(lambda _, t=text: self.remove_ticker(t))
+            self.ticker_list.addItem(item)
+
+    def remove_ticker(self, ticker):
+        if ticker in self.tickers:
+            self.tickers.remove(ticker)
+            for i in range(self.ticker_list.count()):
+                if self.ticker_list.item(i).text() == ticker:
+                    self.ticker_list.takeItem(i)
+                    break
+
     def get_config(self):
         return {
-            "ticker": self.ticker_input.text().strip().upper(),
+            "tickers": self.tickers,
             "start_date": self.start_date.date().toString("yyyy-MM-dd"),
             "end_date": self.end_date.date().toString("yyyy-MM-dd"),
             "initial_capital": float(self.initial_capital.text()) if self.initial_capital.text().isdigit() else 10000,
