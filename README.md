@@ -1,8 +1,9 @@
 # Canalytics Strategy Backtester
 ![image info](./static/cover.png)
-
+**DISCLAIMER: this is an academic project in progress, and not intended for industry use**
 
 **Canalytics** is a flexible backtesting engine built to evaluate algorithmic trading strategies across multiple stock tickers using preset or custom strategies. It's designed for traders and developers who want clear performance insights and modular extensibility.
+
 
 ## Core Features
 
