@@ -18,6 +18,7 @@ from core import strategy as strategy_module
 from core import backtest as backtest_module
 import yfinance as yf
 import pandas as pd
+from data.data_service import DataService
 
 
 class MainWindow(FramelessWindow):
@@ -68,6 +69,12 @@ class MainWindow(FramelessWindow):
         run_button.setStyleSheet(button_style)
         run_button.clicked.connect(self.run_backtest)
         header_layout.addWidget(run_button)
+
+        reset_button = QPushButton("Reset")
+        reset_button.setCursor(Qt.PointingHandCursor)
+        reset_button.setStyleSheet(button_style)
+        reset_button.clicked.connect(self.reset_app)
+        header_layout.addWidget(reset_button)
 
         main_layout.addLayout(header_layout)
 
@@ -137,11 +144,11 @@ class MainWindow(FramelessWindow):
         colors = ['#4fc3f7', '#ff8a65', '#9575cd', '#81c784', '#f06292', '#ffd54f', '#64b5f6', '#e57373', '#a1887f', '#4db6ac']
 
         for i, ticker in enumerate(tickers):
-            df = yf.download(ticker, start=start, end=end)
+            df = DataService.load_data(ticker, start, end)
             if isinstance(df.columns, pd.MultiIndex):
                 df.columns = df.columns.get_level_values(0)
             if df.empty:
-                print(f"Failed to download data for {ticker}")
+                print(f"Failed to load data for {ticker}")
                 continue
 
             strat = strat_cfg["strategy"]
@@ -230,6 +237,18 @@ class MainWindow(FramelessWindow):
 
             self.metrics_layout.addWidget(QLabel(f"{ticker} Max Drawdown:"), row * 3 + 2, 0)
             self.metrics_layout.addWidget(QLabel(f"{stats['drawdown']:.2%}"), row * 3 + 2, 1)
+
+    def reset_app(self):
+        # Stop any running backtest (if threaded, add logic here)
+        self.input_config = None
+        self.strategy_config = None
+        self.plot_widget.clear()
+        self.results = {}
+        # Clear metrics layout
+        for i in reversed(range(self.metrics_layout.count())):
+            widget = self.metrics_layout.itemAt(i).widget()
+            if widget:
+                widget.setParent(None)
 
 
 if __name__ == "__main__":
