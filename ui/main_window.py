@@ -115,10 +115,9 @@ class MainWindow(FramelessWindow):
                 self.strategy_config = None
         elif title == "Data":
             dialog = DataLayerDialog()
+            dialog.exec_()
         elif title == "System":
             dialog = SystemSettingsDialog()
-
-        if dialog:
             dialog.exec_()
 
     def run_backtest(self):
